@@ -54,6 +54,17 @@ func (in ProtocolDefinition) FindCommand(id byte) *Command {
 	return nil
 }
 
+// FindCommandUsingName :
+func (in ProtocolDefinition) FindCommandUsingName(id string) *Command {
+	for _, c := range in.Commands {
+		if c.Name == id {
+			return &c
+		}
+	}
+
+	return nil
+}
+
 func (in ProtocolDefinition) String() string {
 	s := ""
 	for _, v := range in.Commands {
