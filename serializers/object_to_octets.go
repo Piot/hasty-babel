@@ -42,6 +42,9 @@ func argumentToOctet(arg definition.Argument, data []byte, v *reflect.Value) (in
 
 func argumentValueToOctet(arg definition.Argument, data []byte, v interface{}) (int, error) {
 	switch arg.ArgumentType {
+	case "u64":
+		binary.BigEndian.PutUint64(data, uint64(v.(int)))
+		return 8, nil
 	case "u32":
 		binary.BigEndian.PutUint32(data, uint32(v.(int)))
 		return 4, nil
@@ -72,10 +75,17 @@ func argumentValueToOctet(arg definition.Argument, data []byte, v interface{}) (
 
 func copyStringToOctets(s string, data []byte) int {
 	n := len(s)
-	data[0] = byte(n)
+	lengthEncodedOctets, err := SmallLengthToOctets(uint16(n))
+	if err != nil {
+		fmt.Printf("Problem:%s", err)
+	}
+	lengthEncodingSize := len(lengthEncodedOctets)
+	pos := 0
+	copy(data, lengthEncodedOctets)
+	pos += lengthEncodingSize
 	stringOctets := []byte(s)
-	copy(data[1:], stringOctets)
-	return n + 1
+	copy(data[pos:], stringOctets)
+	return n + lengthEncodingSize
 }
 
 func usingFields(in definition.ProtocolDefinition, foundCommand definition.Command, source interface{}) ([]byte, error) {
@@ -84,7 +94,7 @@ func usingFields(in definition.ProtocolDefinition, foundCommand definition.Comma
 		log.Fatalf("Reflect:%v", reflectErr)
 		return nil, reflectErr
 	}
-	var tempBuf = make([]byte, 256)
+	var tempBuf = make([]byte, 32*1024)
 	pos := 0
 	tempBuf[pos] = foundCommand.ID
 	pos++
@@ -103,14 +113,15 @@ func usingFields(in definition.ProtocolDefinition, foundCommand definition.Comma
 }
 
 func usingMap(in definition.ProtocolDefinition, foundCommand definition.Command, source *map[interface{}]interface{}) ([]byte, error) {
-	var tempBuf = make([]byte, 256)
+	var tempBuf = make([]byte, 32*1024)
 	pos := 0
 	tempBuf[pos] = foundCommand.ID
 	pos++
+	log.Printf("SOURCE: %+v", source)
 	for _, a := range foundCommand.Arguments {
 		uppercased := a.Name // strings.Title(a.Name)
 		target := (*source)[uppercased]
-		log.Printf("Converting %s", a)
+		log.Printf("Converting %s to target: %v", a, target)
 		octetCount, parseErr := argumentValueToOctet(a, tempBuf[pos:], target)
 		if parseErr != nil {
 			return nil, fmt.Errorf("Argument to Octet:%s", parseErr)
